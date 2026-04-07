@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { type CSSProperties, useState } from "react";
 
 const INCIDENT_TYPES = [
   { value: 'BreachOfCourtOrder', label: 'Breach of Court Order' },
@@ -32,27 +32,66 @@ const C = {
   gold500: '#F6BA21', slate300: '#cbd5e1', slate400: '#94a3b8', slate500: '#64748b',
 };
 
-const lbl = {
+const lbl: CSSProperties = {
   display:'block', fontSize:'10px', fontWeight:700, color:C.gold500,
   textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:'6px',
 };
-const inp = {
+const inp: CSSProperties = {
   width:'100%', background:C.navy900, border:'1px solid rgba(246,186,33,0.2)',
   borderRadius:'8px', color:'#fff', padding:'10px 14px', fontSize:'13px',
   fontFamily:'Inter,sans-serif', outline:'none', boxSizing:'border-box',
 };
 
+type FormState = {
+  incidentType: string;
+  date: string;
+  time: string;
+  severity: string;
+  location: string;
+  witnesses: string;
+  details: string;
+  province: string;
+};
+
+type AnthropicResponse = {
+  content?: Array<{
+    type?: string;
+    text?: string;
+  }>;
+};
+
+type Statute = {
+  name: string;
+  citation: string;
+  url: string;
+  plainLanguage?: string;
+};
+
+type ReportState = {
+  reportTitle: string;
+  professionalSummary: string;
+  legalClassification: string;
+  primaryStatutes?: Statute[];
+  additionalStatutes?: Statute[];
+  keyFlags?: string[];
+  meta: FormState & {
+    typeLabel: string;
+    generated: string;
+  };
+};
+
 export default function App() {
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<FormState>({
     incidentType:'', date: new Date().toISOString().split('T')[0],
     time:'', severity:'High', location:'', witnesses:'', details:'', province:'Ontario',
   });
-  const [report, setReport] = useState(null);
+  const [report, setReport] = useState<ReportState | null>(null);
   const [err, setErr] = useState('');
-  const [openStatute, setOpenStatute] = useState({});
+  const [openStatute, setOpenStatute] = useState<Record<number, boolean>>({});
 
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const set = <K extends keyof FormState>(k: K, v: FormState[K]) =>
+    setForm(f => ({ ...f, [k]: v }));
 
   const generate = async () => {
     if (!form.incidentType || !form.details.trim()) {
@@ -96,7 +135,7 @@ For EVERY statute in primaryStatutes and additionalStatutes, include a "plainLan
         body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:1200,
           messages:[{ role:"user", content:prompt }] })
       });
-      const data = await res.json();
+      const data: AnthropicResponse = await res.json();
       const raw = data.content?.find(b => b.type==='text')?.text || '';
       const parsed = JSON.parse(raw.replace(/```json|```/g,'').trim());
       setReport({ ...parsed, meta: { ...form, typeLabel, generated: new Date().toLocaleDateString('en-CA') } });
@@ -122,6 +161,7 @@ For EVERY statute in primaryStatutes and additionalStatutes, include a "plainLan
   // ── REPORT ───────────────────────────────────────────────────────
   if (step === 3 && report) {
     const sevCol = report.meta.severity==='High' ? '#f87171' : report.meta.severity==='Medium' ? '#fbbf24' : '#34d399';
+    const keyFlags = report.keyFlags ?? [];
     const allStatutes = [...(report.primaryStatutes||[]), ...(report.additionalStatutes||[])];
     return (
       <div style={{ minHeight:'100vh', background:`linear-gradient(135deg,${C.navy950},${C.navy850})`, padding:'24px', fontFamily:'Inter,sans-serif' }}>
@@ -170,11 +210,11 @@ For EVERY statute in primaryStatutes and additionalStatutes, include a "plainLan
               <div style={{ height:1, background:'rgba(246,186,33,0.1)', marginBottom:'18px' }}/>
 
               {/* Flags */}
-              {report.keyFlags?.length > 0 && (
+              {keyFlags.length > 0 && (
                 <div style={{ marginBottom:'18px' }}>
                   <p style={lbl}>Key Legal Flags</p>
                   <div style={{ display:'flex', flexWrap:'wrap', gap:'8px' }}>
-                    {report.keyFlags.map((f,i)=>(
+                    {keyFlags.map((f,i)=>(
                       <span key={i} style={{ background:'rgba(246,186,33,0.07)', border:'1px solid rgba(246,186,33,0.2)', color:C.slate300, fontSize:'11px', padding:'5px 12px', borderRadius:'20px' }}>{f}</span>
                     ))}
                   </div>
