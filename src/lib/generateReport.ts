@@ -2,6 +2,23 @@ import type { FormState, ReportState } from '../components/IncidentReport/types'
 
 type RawReport = Omit<ReportState, 'meta'>;
 
+export function getGenerateReportUrl(currentHostname?: string): string {
+  const configuredBase = process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/+$/, '');
+  const defaultPath = '/api/generate-report';
+
+  if (!configuredBase) return defaultPath;
+
+  // In production browsers, never call localhost even if it was configured during local dev.
+  if (typeof window !== 'undefined' || currentHostname) {
+    const hostname = currentHostname ?? window.location.hostname;
+    const isConfiguredLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/.*)?$/i.test(configuredBase);
+    const isCurrentHostLocal = /^(localhost|127\.0\.0\.1)$/i.test(hostname);
+    if (isConfiguredLocalhost && !isCurrentHostLocal) return defaultPath;
+  }
+
+  return `${configuredBase}/generate-report`;
+}
+
 export async function generateReport(form: FormState, typeLabel: string): Promise<RawReport> {
   const prompt = `You are a legal documentation assistant for CustodyBuddy, a co-parenting toolkit for self-represented Canadian parents. Generate a professional, court-ready incident report.
 
@@ -32,8 +49,7 @@ Respond ONLY with a valid JSON object (no markdown, no fences) with this exact s
 
 For EVERY statute in primaryStatutes and additionalStatutes, include a "plainLanguage" field: 1-2 sentences in plain English (no legalese) explaining what this law does and why it matters for a self-represented parent in a custody dispute. For additionalStatutes, include 1-2 relevant ${form.province} statutes and any applicable Criminal Code section if warranted. keyFlags: 2-4 short legally significant phrases.`;
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? '/api';
-  const res = await fetch(`${apiUrl}/generate-report`, {
+  const res = await fetch(getGenerateReportUrl(), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ prompt }),

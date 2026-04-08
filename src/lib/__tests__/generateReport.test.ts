@@ -1,4 +1,4 @@
-import { generateReport } from '../generateReport';
+import { generateReport, getGenerateReportUrl } from '../generateReport';
 import type { FormState } from '../../components/IncidentReport/types';
 
 const mockForm: FormState = {
@@ -33,6 +33,7 @@ const makeResponse = (body: object, ok = true) => ({
 });
 
 beforeEach(() => {
+  delete process.env.NEXT_PUBLIC_API_URL;
   global.fetch = jest.fn().mockResolvedValue(makeResponse(mockReport));
 });
 
@@ -54,6 +55,22 @@ describe('generateReport', () => {
     const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
     expect(body.prompt).toContain('Ontario');
     expect(body.prompt).toContain('Breach of Court Order');
+  });
+
+  it('uses same-origin /api route when NEXT_PUBLIC_API_URL points to localhost in a non-local browser', () => {
+    process.env.NEXT_PUBLIC_API_URL = 'http://localhost:3000/api';
+    expect(getGenerateReportUrl('whitesmoke-ibis-623373.hostingersite.com')).toBe('/api/generate-report');
+  });
+
+  it('uses NEXT_PUBLIC_API_URL when configured to a non-localhost URL', async () => {
+    process.env.NEXT_PUBLIC_API_URL = 'https://custodybuddy.com/api';
+
+    await generateReport(mockForm, 'Breach of Court Order');
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://custodybuddy.com/api/generate-report',
+      expect.objectContaining({ method: 'POST' })
+    );
   });
 
   it('returns the parsed report data from the API route', async () => {
